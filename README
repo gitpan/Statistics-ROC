@@ -1,0 +1,24 @@
+  ROC.pm - A Perl module implementing receiver-operator-characteristic (ROC)
+           curves with nonparametric confidence bounds
+
+     Copyright (c) 1998 Hans A. Kestler. All rights reserved.
+     This program is free software; you may redistribute it and/or
+     modify it under the same terms as Perl itself.
+
+  This code implements a method for constructing nonparametric confidence
+  for ROC curves described in     
+        R.A. Hilgers, Distribution-Free Confidence Bounds for ROC Curves, 
+        Meth Inform Med 1991; 30:96-101
+  Additionally some auxilliary functions were ported (and corrected) from 
+  Fortran (Applied Statistics, ACM).
+
+  
+  A graphical userinterface for drawing and printing these ROC curves is 
+  supplied with the module (roc_ui.pl).
+  
+  
+  Written in Perl by Hans A. Kestler.
+  Bugs, comments, suggestions to: 
+              Hans A. Kestler <hans.kestler@medizin.uni-ulm.de>
+                              <h.kestler@ieee.org>
+

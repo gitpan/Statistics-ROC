@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl  -w
+#!/usr/bin/perl  -w
 #LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
 #
 #    Graphical User Interface for drawing and printing
@@ -8,35 +8,40 @@
 #    
 #    
 #
-#     copyright 1998 by Hans A. Kestler
+#     copyright 1998-2000 by Hans A. Kestler
 #
 #
-#    Locations of perl and modules have to adapted to local configurations.
+#    Locations of Perl and modules have to be adapted to local configurations.
 #
 #LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
 
 # change paths if needed (probably)
-use lib '/hardi2/perl5.004_04/lib/site_perl'; 
-use lib '/users/kestler/PL/ROC.core/';
+use lib '/opt/perl5/lib/site_perl/5.005/PA-RISC2.0/Tk'; 
+use lib '/home/kestler/PL/ROC.core/';
 
+
+#LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
 use Statistics::ROC;
 
 use Carp;
 use strict;
 use Cwd;
 use Cwd 'chdir';
-use GIFgraph::lines;
+
 use Tk;
 use Tk::FileDialog;
 use Tk::WaitBox;
 #LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
 
 ##################### global variables ################
-use vars qw/$VERSION $DIALOG_ABOUT $DIALOG_USAGE $DIALOG_LOAD_ERROR $WAIT_BOX/;
+use vars qw/$VERSION $undef $loadfirst $DIALOG_ABOUT $DIALOG_USAGE 
+                                             $DIALOG_LOAD_ERROR $WAIT_BOX/;
+
 
 $,=" ";
-$VERSION='0.01';
-
+$VERSION='0.02';
+$undef=0;
+$loadfirst=0; 
 
 
 ###########################################################################
@@ -165,6 +170,9 @@ sub fileSelector{
     
     # check for not existing data
     if(!scalar(@$$var_grp_ref)){$DIALOG_LOAD_ERROR->Show; return;}
+    
+    # set loadfirst flag to indicate that data is loaded
+    $loadfirst=1;
         
     draw_roc([$c,$xzero,$yzero,$xone,$yone,$model_type_ref,$conf_ref,$var_grp_ref]);
     
@@ -172,103 +180,239 @@ sub fileSelector{
 
 
 sub draw_roc{
-    # Draws the receiver-operator characteristic curve with confidence bounds.
-    #
-    # Arguments: * handle of the canvas widget
-    #            * (0,0)- and (1,1)-points in pixels
-    #              of the drawing area (this is the complete drawing area).
-    #              It is assumed that y-coordinates increase from top
-    #              to bottom of the widget, the x-coord. increase as expected
-    #              from left to right.
-    #            * the model type, this is a reference to string
-    #            * the 2-sided confidence interval in %
-    #            * the reference to the data (list-of-list)
+  # Draws the receiver-operator characteristic curve with confidence bounds.
+  #
+  # Arguments: * handle of the canvas widget
+  #            * (0,0)- and (1,1)-points in pixels
+  #              of the drawing area (this is the complete drawing area).
+  #              It is assumed that y-coordinates increase from top
+  #              to bottom of the widget, the x-coord. increases as expected
+  #              from left to right.
+  #            * the model type, this is a reference to string
+  #            * the 2-sided confidence interval in %
+  #            * the reference to the data (list-of-list)
+  
+  my $but=shift;
+  my ($c,$xzero,$yzero,$xone,$yone,$model_type,$conf,$var_grp)=@$but;
+  my $m_type;
+  
+  #print $$model_type,"\n";print $$conf,"\n";
+  #print ref($$model_type),"\n";print ref($$conf),"\n";
+  
 
-    my $but=shift;
-    my ($c,$xzero,$yzero,$xone,$yone,$model_type,$conf,$var_grp)=@$but;
-    
-    
-    #print $$model_type,"\n";print $$conf,"\n";
-    #print ref($$model_type),"\n";print ref($$conf),"\n";
-    
-    $WAIT_BOX->Show;
-    
-    if($$model_type eq 'grp0 >= grp1'){$model_type='decrease'}
-    elsif($$model_type eq 'grp0 <= grp1'){$model_type='increase'}
-    else{ croak "Wrong model type in userinterface\n";}
-        
-    
-    my @ROC=roc($model_type,$$conf/100,@$$var_grp);   
-    my $label;
-     
-    for(my $j=0,my $width;$j<3;$j++)
+  # check for not existing data
+  if(!$loadfirst){$DIALOG_LOAD_ERROR->Show; return;}
+  
+  ($main::state_b,$main::state_o,$main::state_p,$main::state_r,$main::state_v)=
+                                                            (1,1,1,1,1); # reset checkbuttons
+  
+  $WAIT_BOX->Show;
+  
+  if($$model_type eq 'grp0 > grp1'){$m_type='decrease'}
+  elsif($$model_type eq 'grp0 < grp1'){$m_type='increase'}
+  else{ croak "Wrong model type in userinterface\n";}
+  
+  
+  my @ROC=roc($m_type,$$conf/100,@$$var_grp);   
+  my $label;
+  
+  for(my $j=0,my $width;$j<3;$j++)
     {
-       if($j==1){$width=2; $label='plot';}else{$width=1;$label='bounds';} # set ROC line width to 2
-       for(my $i=0;$i<@{$ROC[0]}-1;$i++) # step thru (x,y)-pairs
-       {
+      if($j==1){$width=2; $label='plot';}else{$width=1;$label='bounds';} # set ROC line width to 2
+      for(my $i=0;$i<@{$ROC[0]}-1;$i++) # step thru (x,y)-pairs
+	{
           $c->create('line',
-              ($xone-$xzero)*$ROC[$j][$i][0]+$xzero,
-              ($yone-$yzero)*$ROC[$j][$i][1]+$yzero,
-              ($xone-$xzero)*$ROC[$j][$i+1][0]+$xzero,
-              ($yone-$yzero)*$ROC[$j][$i+1][1]+$yzero, 
-              -fill=>'red',  -tags=>[$label],    
-              -width=>$width);
-       } 
+		     ($xone-$xzero)*$ROC[$j][$i][0]+$xzero,
+		     ($yone-$yzero)*$ROC[$j][$i][1]+$yzero,
+		     ($xone-$xzero)*$ROC[$j][$i+1][0]+$xzero,
+		     ($yone-$yzero)*$ROC[$j][$i+1][1]+$yzero, 
+		     -fill=>'red',  -tags=>[$label],    
+		     -width=>$width);
+	} 
     }
-    my (@max,$tmp,$imax,$i); $imax=0;           # calculate optimal cutoff value
-    for($i=0;$i<@{$ROC[0]};$i++)
-    { 
-        $max[$i]=1-$ROC[1][$i][0]+$ROC[1][$i][1]; 
+  
+
+my ($i,$tmp);
+#  # calculate optimal cutoff value of estimated ROC curve
+#  my (@max,$tmp,$imax,$i); $imax=0; # determine max ss/2
+#  for($i=0;$i<@{$ROC[0]};$i++)
+#    { 
+#      $max[$i]=1-$ROC[1][$i][0]+$ROC[1][$i][1]; 
+#    }
+#  for($i=0,$tmp=$max[0];$i<@{$ROC[0]};$i++)
+#    { 
+#      if($max[$i]>$tmp)
+#	{$tmp=$max[$i]; $imax=$i;}
+#    }
+  
+ 
+#  $c->create('line',($xone-$xzero)*$ROC[1][$imax][0]+$xzero, 
+#	     $yzero,
+#	     ($xone-$xzero)*$ROC[1][$imax][0]+$xzero,
+#	     ($yone-$yzero)*$ROC[1][$imax][1]+$yzero, 
+#	     -fill=>'blue',  -tags=>['opt'],    
+#	     -width=>2);
+#  $c->create('line',$xzero, 
+#	     ($yone-$yzero)*$ROC[1][$imax][1]+$yzero,
+#	     $xone,
+#	     ($yone-$yzero)*$ROC[1][$imax][1]+$yzero, 
+#	     -fill=>'blue',  -tags=>['opt'],    
+#	     -width=>2);
+#  $c->create('oval',($xone-$xzero)*$ROC[1][$imax][0]+$xzero-6,           
+#	     ($yone-$yzero)*$ROC[1][$imax][1]+$yzero-6,
+#	     ($xone-$xzero)*$ROC[1][$imax][0]+$xzero+6,           
+#	     ($yone-$yzero)*$ROC[1][$imax][1]+$yzero+6,
+#	     -width=>1,-fill=>'blue',-tags=>['opt']);
+#  my $text= sprintf "%1.3f\n%1.3f", $ROC[1][$imax][0], $ROC[1][$imax][1];
+#  $c->createText(($xone-$xzero)*$ROC[1][$imax][0]+$xzero,           
+#		 ($yone-$yzero)*$ROC[1][$imax][1]+$yzero-30,
+#		 -text=>$text,
+#		 -tags=>['realroc']);
+  
+  
+  # calculate optimal cutoff value of empirical ROC curve  
+  my($rp,$fp,$rn,$fn)=(0,0,0,0);
+  my($acc,$sensi,$speci,$ppv,$npv);
+  my @ss2=();
+  my $g;
+  my $gmax;
+  my $text;
+   
+  for( my $j=0;$j<@$$var_grp;$j++)    
+    {	
+      $g = $$$var_grp[$j][0]; 	
+      #print $g, "\n";
+      ($rp,$fp,$rn,$fn)=(0,0,0,0);  
+      for($i=0;$i<@$$var_grp;$i++)
+	{ 
+	  if($m_type eq 'increase')
+	    {
+	      if($$$var_grp[$i][0] > $g)
+		{
+		  if($$$var_grp[$i][1] == 1){$rp++;}
+		  else {$fp++;}
+		}
+	      else
+		{
+		  if($$$var_grp[$i][1] == 0){$rn++;}
+		  else {$fn++;}
+		}
+	    }
+	  else			# modeltype decrease
+	    {
+	      if($$$var_grp[$i][0] < $g)
+		{
+		  if($$$var_grp[$i][1] == 1){$rp++;}
+		  else {$fp++;}
+		}
+	      else
+		{
+		  if($$$var_grp[$i][1] == 0){$rn++;}
+		  else {$fn++;}
+		}
+	    }
+	}
+      #print "$rp $rn $fn $fp \n";
+      # acc sensi speci ppv npv
+      if(!eval{$acc   = ($rn + $rp) / ($rn + $rp + $fn + $fp);}) {$acc=$undef;}
+      if(!eval{$sensi = $rp / ($fn + $rp);}) {$sensi=$undef;}
+      if(!eval{$speci = $rn / ($fp + $rn);}) {$speci=$undef;}
+      if(!eval{$ppv   = $rp / ($fp + $rp);}) {$ppv=$undef;}
+      if(!eval{$npv   = $rn / ($fn + $rn);}) {$npv=$undef;}
+      #print "Threshold: $g \n";
+      #print "$acc, $sensi, $speci, $ppv, $npv \n";
+      #print "---------------\n";
+      push @ss2, [$acc, $sensi, $speci, $ppv, $npv];  
     }
-    for($i=0,$tmp=$max[0];$i<@{$ROC[0]};$i++)
-    { 
-        if($max[$i]>$tmp)
-          {$tmp=$max[$i]; $imax=$i;}
-    }
-    # print "HIIIII\n";
-    $c->create('line',($xone-$xzero)*$ROC[1][$imax][0]+$xzero, 
-                      $yzero,
-                     ($xone-$xzero)*$ROC[1][$imax][0]+$xzero,
-                     ($yone-$yzero)*$ROC[1][$imax][1]+$yzero, 
-                      -fill=>'blue',  -tags=>['opt'],    
-                      -width=>2);
-    $c->create('line',$xzero, 
-                     ($yone-$yzero)*$ROC[1][$imax][1]+$yzero,
-                      $xone,
-                     ($yone-$yzero)*$ROC[1][$imax][1]+$yzero, 
-                      -fill=>'blue',  -tags=>['opt'],    
-                      -width=>2);
-    $c->create('oval',($xone-$xzero)*$ROC[1][$imax][0]+$xzero-6,           
-                      ($yone-$yzero)*$ROC[1][$imax][1]+$yzero-6,
-                      ($xone-$xzero)*$ROC[1][$imax][0]+$xzero+6,           
-                      ($yone-$yzero)*$ROC[1][$imax][1]+$yzero+6,
-                       -width=>1,-fill=>'blue',-tags=>['opt']);
-                        
-    $WAIT_BOX->unShow;                    
+ 
+  for($i=0,$tmp=$ss2[0][1]+$ss2[0][2],$gmax=$tmp;$i<@ss2;$i++)
+    {       
+      if($ss2[$i][1]+$ss2[$i][2]>$tmp) {$tmp=$ss2[$i][1]+$ss2[$i][2]; $gmax=$i;}      
+    } 
+  
+  $c->createText($xzero+300, $yone-20,
+		 -text=>"Threshold: $$$var_grp[$gmax][0]",
+		 -tags=>['values']);
+  
+ 
+  # rounding routine because 0.8125 rounds falsely with %.3 to 0.812
+  sub round {$_[0] >0 ? int $_[0]+0.5 : int $_[0]-0.5}
+  $text= sprintf "ACC SENSI SPECI PPV NPV\n%.3f %.3f %.3f %.3f %.3f", 
+                                         map {round(int($_ *10000)/10)/1000} @{$ss2[$gmax]};  
+  $c->createText($xzero+100, $yone-20,
+		 -text=>$text,
+		 -tags=>['values']);
+
+  $c->createLine(($xone-$xzero)*(1-$ss2[$gmax][2])+$xzero, 
+	     $yzero,
+	     ($xone-$xzero)*(1-$ss2[$gmax][2])+$xzero,
+	     ($yone-$yzero)*$ss2[$gmax][1]+$yzero, 
+	     -fill=>'blue',  -tags=>['opt'],    
+	     -width=>2);
+  $c->createLine($xzero, 
+	     ($yone-$yzero)*$ss2[$gmax][1]+$yzero,
+	     $xone,
+	     ($yone-$yzero)*$ss2[$gmax][1]+$yzero, 
+	     -fill=>'blue',  -tags=>['opt'],    
+	     -width=>2);
+  $c->createOval(($xone-$xzero)*(1-$ss2[$gmax][2])+$xzero-6,           
+	     ($yone-$yzero)*$ss2[$gmax][1]+$yzero-6,
+	     ($xone-$xzero)*(1-$ss2[$gmax][2])+$xzero+6,           
+	     ($yone-$yzero)*$ss2[$gmax][1]+$yzero+6,
+	     -width=>1,-fill=>'blue',-tags=>['opt']);
+ 
+  $text= sprintf "%1.3f\n%1.3f", 1-$ss2[$gmax][2], $ss2[$gmax][1];
+  $c->createText(($xone-$xzero)*(1-$ss2[$gmax][2])+$xzero,           
+		 ($yone-$yzero)*$ss2[$gmax][1]+$yzero-30,
+		 -text=>$text,
+		 -tags=>['opt','values']);
+  
+  
+    
+  
+  my @s=sort{(1-$ss2[$a][2]) <=> (1-$ss2[$b][2]) || $ss2[$a][1] <=> $ss2[$b][1]} 0..$#ss2;
+  #print " $#ss2  $#s \n";
+  @ss2=@ss2[@s];
+  #for($i=0;$i<@ss2;$i++){print 1-$ss2[$i][2], $ss2[$i][1] ,"\n";}
+  
+  for($i=0;$i<$#ss2;$i++)	  # step thru (x,y)-pairs
+    {
+      $c->createLine(
+		     ($xone-$xzero)*(1-$ss2[$i][2])+$xzero,
+		     ($yone-$yzero)*$ss2[$i][1]+$yzero,
+		     ($xone-$xzero)*(1-$ss2[$i+1][2])+$xzero,
+		     ($yone-$yzero)*$ss2[$i+1][1]+$yzero, 
+		     -fill=>'green4',  -tags=>['realroc'],    
+		     -width=>2);
+    } 
+   
+
+  
+  $WAIT_BOX->unShow;                    
 }
 
 
 sub initialize_messages{
-
-    my $MW=shift;
-    # Create all application Dialog objects.
-    $DIALOG_LOAD_ERROR=$MW->Dialog(-title   => 'ERRROR',-text    => 
-"The data is not in the right format! 
+  
+  my $MW=shift;
+  # Create all application Dialog objects.
+  $DIALOG_LOAD_ERROR=$MW->Dialog(-title   => 'ERRROR',-text    => 
+				 "The data has NOT been loaded or is NOT in the right format! 
 The datafile has to have the following structure with one
 sample per row: \n    <value> <class:0/1>",
-		         -bitmap  => 'info',-wraplength => '3i',
-		         -buttons => ['Dismiss']);
-    $DIALOG_ABOUT = $MW->Dialog(
-				-title   => 'About',
-				-text    => 
-"ROC with confidence $VERSION \n\n29. April 1998\n\n
+				 -bitmap  => 'info',-wraplength => '3i',
+				 -buttons => ['Dismiss']);
+  $DIALOG_ABOUT = $MW->Dialog(
+			      -title   => 'About',
+			      -text    => 
+			      "ROC with confidence $VERSION \n\n15. February 2000\n\n
 This program calculates receiver-operator characteristic  
 curves with nonparametric confidence bounds from data 
 separated into two groups.\n
 Author: Hans A. Kestler, h.kestler\@ieee.org
                          hans.kestler\@medizin.uni-ulm.de
-Copyright (c) 1998 by Hans Kestler. All rights reserved. This 
-program is free software; it may be redistributed and/or 
+Copyright (c) 1998-2000 by Hans Kestler. All rights reserved. 
+This program is free software; it may be redistributed and/or 
 modified under the same terms as Perl itself.",
 				-bitmap  => 'info',-wraplength => '6i',
 				-buttons => ['Dismiss'],
@@ -294,11 +438,11 @@ drawing area. The confidence limits are set
 with the scales. The curve won't be redrawn
 after changing this interval. Either the model
 has to be reselected or the BOUNDS ON/OFF 
-button in the OPTIONS menu has to be toggeled
+button in the OPTIONS menu has to be toggled
 to redraw the curve.\n
-The ROC curve may saved or printed by selecting
+The ROC curve may be saved or printed by selecting
 the <Print/Save as Postscript> button below the
-canvas. If the enrty field just above this
+canvas. If the entry field just above this
 button is set to <lpr> the curve will be sent to
 the printer otherwise it will saved in the file
 specified (so don't use a filename with the
@@ -306,7 +450,13 @@ string lpr at the begining).\n
 The <Options> menu gives some restricted 
 possibilities of changing the appearance of the
 graph. The <Optimium> is calculated by maximizing
-simultaneously the sensitivity and specificity.");
+simultaneously the sensitivity and specificity.
+The performance values displayed above the canvas
+give the optimal dicriminative ability of the
+threshold value maximizing sensitivity and
+specificity. If the model is grp0 < grp1 the 
+threshold value belongs to grp0, i.e.
+grp1 if value > threshold.");
 
      $WAIT_BOX=$MW->WaitBox;#(-bitmap=>'questhead');
 
@@ -314,92 +464,92 @@ simultaneously the sensitivity and specificity.");
 
 
 sub draw_grid{
-    # Draws a grid inside the canvas widget
-    #
-    # The available space is evenly divided into 10x10
-    # rectangels.
-    # Arguments: * handle of the canvas widget
-    #            * (0,0)- and (1,1)-points in pixles
-    #              of the drawing area (this is the complete drawing area)
-    #              It is assumed that y-coordinates increase from top
-    #              to bottom of the widget, the x-coord. increase as expected
-    #              from left to right.
-
-    my ($c,$xzero,$yzero,$xone,$yone)=@{shift()};
-   
-    for(my $i=0,my $inc=($xone-$xzero)/10;$i<=10;$i++){
-        $c->createLine($xzero+$i*$inc,$yzero+4,
-                       $xzero+$i*$inc,$yone,-width=>2,-tags=>['grid']);
-    }
-    for(my $i=0,my $inc=($yone-$yzero)/10;$i<=10;$i++){
-        $c->createLine($xzero-4,$yzero+$i*$inc,
-                       $xone,$yzero+$i*$inc,-width=>2,-tags=>['grid']);
-    }
-} # end draw_grid
+  # Draws a grid inside the canvas widget
+  #
+  # The available space is evenly divided into 10x10
+  # rectangels.
+  # Arguments: * handle of the canvas widget
+  #            * (0,0)- and (1,1)-points in pixles
+  #              of the drawing area (this is the complete drawing area)
+  #              It is assumed that y-coordinates increase from top
+  #              to bottom of the widget, the x-coord. increase as expected
+  #              from left to right.
+  
+  my ($c,$xzero,$yzero,$xone,$yone)=@{shift()};
+  
+  for(my $i=0,my $inc=($xone-$xzero)/10;$i<=10;$i++){
+    $c->createLine($xzero+$i*$inc,$yzero+4,
+		   $xzero+$i*$inc,$yone,-width=>2,-tags=>['grid']);
+  }
+  for(my $i=0,my $inc=($yone-$yzero)/10;$i<=10;$i++){
+    $c->createLine($xzero-4,$yzero+$i*$inc,
+		   $xone,$yzero+$i*$inc,-width=>2,-tags=>['grid']);
+  }
+}				# end draw_grid
 
 
 sub draw_small_ticks{
-    # Draws small ticks. 
-    #
-    # Draws 100 small ticks on the x- and y- axis.
-    # Arguments: * handle of the canvas widget
-    #            * (0,0)- and (1,1)-points in pixles
-    #              of the drawing area (this is the complete drawing area)
-    #              It is assumed that y-coordinates increase from top
-    #              to bottom of the widget, the x-coord. increase as expected
-    #              from left to right.
-
-    my ($c,$xzero,$yzero,$xone,$yone)=@{shift()};
-   
-    for(my $i=0,my $inc=($xone-$xzero)/100;$i<=100;$i++){
-        $c->createLine($xzero+$i*$inc,$yzero+3,
-                       $xzero+$i*$inc,$yzero,-width=>1);
-    }
-    for(my $i=0,my $inc=($yone-$yzero)/100;$i<=100;$i++){
-        $c->createLine($xzero-3,$yzero+$i*$inc,
-                       $xzero,$yzero+$i*$inc,-width=>1);
-    }
-} # end draw_small_ticks
+  # Draws small ticks. 
+  #
+  # Draws 100 small ticks on the x- and y- axis.
+  # Arguments: * handle of the canvas widget
+  #            * (0,0)- and (1,1)-points in pixles
+  #              of the drawing area (this is the complete drawing area)
+  #              It is assumed that y-coordinates increase from top
+  #              to bottom of the widget, the x-coord. increase as expected
+  #              from left to right.
+  
+  my ($c,$xzero,$yzero,$xone,$yone)=@{shift()};
+  
+  for(my $i=0,my $inc=($xone-$xzero)/100;$i<=100;$i++){
+    $c->createLine($xzero+$i*$inc,$yzero+3,
+		   $xzero+$i*$inc,$yzero,-width=>1);
+  }
+  for(my $i=0,my $inc=($yone-$yzero)/100;$i<=100;$i++){
+    $c->createLine($xzero-3,$yzero+$i*$inc,
+		   $xzero,$yzero+$i*$inc,-width=>1);
+  }
+}				# end draw_small_ticks
 
 
 sub draw_numbers{
-    # Draws the numbers {0, 0.1,..., 0.9, 1.0} the x- and y-axis. 
-    #
-    # Arguments: * handle of the canvas widget
-    #            * (0,0)- and (1,1)-points in pixles
-    #              of the drawing area (this is the complete drawing area)
-    #              It is assumed that y-coordinates increase from top
-    #              to bottom of the widget, the x-coord. increase as expected
-    #              from left to right.
-
-    my ($c,$xzero,$yzero,$xone,$yone)=@{shift()};
-   
-    for(my $i=0,my $inc=($xone-$xzero)/10;$i<=10;$i++){
-        $c->create('text',$xzero+$i*$inc,$yzero+4+10,
-                       -text=>$i/10);
-    }
-    for(my $i=0,my $inc=($yone-$yzero)/10;$i<=10;$i++){
-        $c->create('text',$xzero-4-10,$yzero+$i*$inc,
-                       -text=>$i/10);
-    }
-} # end draw_numbers
+  # Draws the numbers {0, 0.1,..., 0.9, 1.0} the x- and y-axis. 
+  #
+  # Arguments: * handle of the canvas widget
+  #            * (0,0)- and (1,1)-points in pixles
+  #              of the drawing area (this is the complete drawing area)
+  #              It is assumed that y-coordinates increase from top
+  #              to bottom of the widget, the x-coord. increase as expected
+  #              from left to right.
+  
+  my ($c,$xzero,$yzero,$xone,$yone)=@{shift()};
+  
+  for(my $i=0,my $inc=($xone-$xzero)/10;$i<=10;$i++){
+    $c->create('text',$xzero+$i*$inc,$yzero+4+10,
+	       -text=>$i/10);
+  }
+  for(my $i=0,my $inc=($yone-$yzero)/10;$i<=10;$i++){
+    $c->create('text',$xzero-4-10,$yzero+$i*$inc,
+	       -text=>$i/10);
+  }
+}				# end draw_numbers
 
 
 sub draw_diagonal{
-    # Draws a diagonal from (0,0) to (1,1).
-    #
-    # Arguments: * handle of the canvas widget
-    #            * (0,0)- and (1,1)-points in pixles
-    #              of the drawing area (this is the complete drawing area)
-    #              It is assumed that y-coordinates increase from top
-    #              to bottom of the widget, the x-coord. increase as expected
-    #              from left to right.
-
-    my ($c,$xzero,$yzero,$xone,$yone)=@{shift()};
-    
-    $c->createLine($xzero,$yzero,$xone,$yone,-width=>2, -tags=>['diag']);
-
-} # end draw_diagonal
+  # Draws a diagonal from (0,0) to (1,1).
+  #
+  # Arguments: * handle of the canvas widget
+  #            * (0,0)- and (1,1)-points in pixles
+  #              of the drawing area (this is the complete drawing area)
+  #              It is assumed that y-coordinates increase from top
+  #              to bottom of the widget, the x-coord. increase as expected
+  #              from left to right.
+  
+  my ($c,$xzero,$yzero,$xone,$yone)=@{shift()};
+  
+  $c->createLine($xzero,$yzero,$xone,$yone,-width=>2, -tags=>['diag']);
+  
+}				# end draw_diagonal
 
 
 
@@ -413,13 +563,13 @@ my $MBF=$MW->Frame(-relief=>'raised',-borderwidth=>1)->pack(-fill=>'x');
 
 
 my ($xsize,$ysize)=(600,580);
-my $area=500;  # actually the length of the quadratic area
+my $area=500;			# actually the length of the quadratic area
 
 # derived values
 my ($xzero,$yzero)=(($xsize-$area)/2,$ysize-($ysize-$area)/2);
 my ($xone,$yone)=($xsize-($xsize-$area)/2,($ysize-$area)/2);
 my @points=($xzero,$yzero,$xone,$yone);
-my $model_type="grp0 <= grp1"; 
+my $model_type ='grp0 < grp1'; 
 my $conf=95; 
 
 
@@ -445,30 +595,51 @@ make_menubutton($MBF,'File',0,'left',[
 
 ###### Options Menu Button ######
 my $mb_o=$MBF->Menubutton(text=>'Options',underline=>0)->pack(side=>'left');
-my ($state_b,$state_g,$state_d,$state_o)=(1,1,1,1);
+($main::state_b,$main::state_g,$main::state_d,$main::state_o,$main::state_p,$main::state_r,
+                                                              $main::state_v)=(1,1,1,1,1,1,1);
 $mb_o->checkbutton(
          -label=>'Bounds on/off',
-         -variable=>\$state_b,
-         -command=>sub{if(!$state_b){$c->delete('bounds')}
-                 else{draw_roc([$c,@points,\$model_type,\$conf,\$var_grp_ref]);}}
+         -variable=>\$main::state_b,
+         -command=>sub{if(!$main::state_b){$c->delete('bounds')}
+                       else{draw_roc([$c,@points,\$model_type,\$conf,\$var_grp_ref]);}}
         );    
 $mb_o->checkbutton(
          -label=>'Grid on/off',
-         -variable=>\$state_g,
-         -command=>sub{if(!$state_g){$c->delete('grid')}
-                       else{draw_grid([$c,@points]);}}
+         -variable=>\$main::state_g,
+         -command=>sub{if(!$main::state_g){$c->delete('grid')}
+                       #else{draw_grid([$c,@points]);}}
+                       else{draw_grid([$c,@points]);
+                            draw_roc([$c,@points,\$model_type,\$conf,\$var_grp_ref]);}}
         );
 $mb_o->checkbutton(
          -label=>'Diagonal on/off',
-         -variable=>\$state_d,
-         -command=>sub{if(!$state_d){$c->delete('diag')}
+         -variable=>\$main::state_d,
+         -command=>sub{if(!$main::state_d){$c->delete('diag')}
                        else{draw_diagonal([$c,@points]);}}
         );
 $mb_o->checkbutton(
          -label=>'Optimum on/off',
-         -variable=>\$state_o,
-         -command=>sub{if(!$state_o){$c->delete('opt')}
-                  else{draw_roc([$c,@points,\$model_type,\$conf,\$var_grp_ref]);}} 
+         -variable=>\$main::state_o,
+         -command=>sub{if(!$main::state_o){$c->delete('opt')}
+                       else{draw_roc([$c,@points,\$model_type,\$conf,\$var_grp_ref]);}} 
+        );
+$mb_o->checkbutton(
+         -label=>'Estimated ROC on/off',
+         -variable=>\$main::state_p,
+         -command=>sub{if(!$main::state_p){$c->delete('plot')}
+                       else{draw_roc([$c,@points,\$model_type,\$conf,\$var_grp_ref]);}} 
+        );
+$mb_o->checkbutton(
+         -label=>'Empirical ROC on/off',
+         -variable=>\$main::state_r,
+         -command=>sub{if(!$main::state_r){$c->delete('realroc')}
+                       else{draw_roc([$c,@points,\$model_type,\$conf,\$var_grp_ref]);}} 
+        );
+$mb_o->checkbutton(
+         -label=>'Values on/off',
+         -variable=>\$main::state_v,
+         -command=>sub{if(!$main::state_v){$c->delete('values')}
+                       else{draw_roc([$c,@points,\$model_type,\$conf,\$var_grp_ref]);}} 
         );
                                 
 
@@ -517,7 +688,9 @@ $w_prcmd->bind('<Return>' => [$w_print => 'invoke']);
 my $del_roc=$left->Button(-text=>'Delete ROC curve!',
                              -command=>sub{$c->delete('plot');
                                            $c->delete('opt');
-                                           $c->delete('bounds')},                       
+                                           $c->delete('bounds');
+                                           $c->delete('realroc');
+                                           $c->delete('values')},                       
                              -relief=>'raised')
                              ->grid(qw/-row 2 -column 0 -sticky ew/);
 
@@ -530,7 +703,7 @@ my $conf_scale=$right->Scale('orient'=> 'horizontal',
                            'from'=> 0, 'to'=> 100, 'tickinterval'=> 0, 'width'=> 15, 
                            'length'=> 340,
                            'label'=> "2-sided Confidence Interval (%)",
-                           variable=>\$conf,
+                          -variable=>\$conf,
            #-command=> [\&draw_roc, [$c, @points,\$model_type,\$conf,\$var_grp_ref]], 
            )->grid(qw/-row 0 -column 0 -columnspan 2  -sticky ew/);
 ######################################
@@ -539,13 +712,14 @@ my $conf_scale=$right->Scale('orient'=> 'horizontal',
 ######## Model option button #########
 my $model_button=$right->Menubutton(-text=>'Model:   ',
     -relief=>'raised' )->grid(qw/-row 1 -column 0  -sticky ew/);
-my $model=$right->Optionmenu(-textvariable=>\$model_type,
-                      -options=>["grp0 <= grp1", "grp0 >= grp1"],
+my $model=$right->Optionmenu(-variable => \$model_type,
+                     -options => ['grp0 < grp1', 'grp0 > grp1'], 
+                   #   -options=>['GGGGGGG', 'CCCCCC'],
                    #-command=>sub{print "$model_type \n";},
-                   #-command=>[\&tt,[\$model_type]],
+                   # -command=>sub{print $model_type," \n";},
            #-command=> [\&draw_roc, [$c, @points,\$model_type,0.95,@var_grp]],
          -command=> [\&draw_roc, [$c, @points,\$model_type,\$conf,\$var_grp_ref]],
-                      -relief=>'raised');
+         -relief=>'raised');
 $model->grid(qw/-row 1 -column 1 -sticky ew/);                     
 #######################################
 

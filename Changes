@@ -3,3 +3,15 @@ Revision history for Perl extension Statistics::ROC.
 0.01  Thu Jun  4 09:19:07 1998
 	- original version; created by h2xs 1.18
 
+0.02  Fri Mar 3 2000
+        - the module itself remains unchanged
+        - changed the user interface roc_ui.pl
+          - corrected some minor errors
+          - added some new functionality: estimated and
+            empirical ROC curve, calculation of optimal
+            discriminative abiblity is now based on the
+            empirical ROC curve, the optimal cut-off value
+            (threshold) is now shown above the canvas,
+            some new options of manipulating the drawing area
+            were added
+          - runs with Tk 8.0

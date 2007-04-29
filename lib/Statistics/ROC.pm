@@ -16,7 +16,7 @@
 #
 #  Written in Perl by Hans A. Kestler.
 #  Bugs, comments, suggestions to: 
-#              Hans A. Kestler <hans.kestler@medizin.uni-ulm.de>
+#              Hans A. Kestler <hans.kestler@uni-ulm.de>
 #                              <h.kestler@ieee.org>
 #
 #
@@ -760,14 +760,14 @@ Returns a list-of-lists with the three curves:
 
 =head1 AUTHOR
 
-Hans A. Kestler,  I<hans.kestler@medizin.uni-ulm.de>     B<or> 
+Hans A. Kestler,  I<hans.kestler@uni-ulm.de>     B<or> 
 I<h.kestler@ieee.org>
 
 
 =head1 SEE ALSO
      
 
-Perl/Tk userinterface for drawing ROC curves (to be uploaded shortly).
+Perl/Tk userinterface for drawing ROC curves (requires installed Tk and X11 on MacOS X).
 
 
 R.A. Hilgers, Distribution-Free Confidence Bounds for ROC Curves (1991), 

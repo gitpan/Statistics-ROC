@@ -1,4 +1,4 @@
-#!/usr/bin/perl  -w
+#!perl  -w
 #LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
 #
 #    Graphical User Interface for drawing and printing
@@ -8,7 +8,7 @@
 #    
 #    
 #
-#     copyright 1998-2000 by Hans A. Kestler
+#     copyright 1998-2007 by Hans A. Kestler
 #
 #
 #    Locations of Perl and modules have to be adapted to local configurations.
@@ -16,9 +16,9 @@
 #LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
 
 # change paths if needed (probably)
-use lib '/opt/perl5/lib/site_perl/5.005/PA-RISC2.0/Tk'; 
-use lib '/home/kestler/PL/ROC.core/';
-
+#use lib '/opt/perl5/lib/site_perl/5.005/PA-RISC2.0/Tk'; 
+#use lib '/home/kestler/PL/ROC.core/';
+#use lib '/Applications/perl2exe/perl5/lib/site_perl/5.8.8/Tk';
 
 #LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
 use Statistics::ROC;
@@ -27,21 +27,32 @@ use Carp;
 use strict;
 use Cwd;
 use Cwd 'chdir';
+use File::Basename;
 
 use Tk;
-use Tk::FileDialog;
-use Tk::WaitBox;
+require Tk::Dialog;
+
+#use Tk::DialogBox;
+#use Tk::DummyEncode;
+#use Tk::Canvas;
+#use utf8;
+#use Tk::Menubutton;
+#use Tk::Scale;
+#use Tk::Optionmenu;
+#use Tk::Bitmap;
+#use Tk::FBox;
 #LLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLLL
 
 ##################### global variables ################
-use vars qw/$VERSION $undef $loadfirst $DIALOG_ABOUT $DIALOG_USAGE 
+use vars qw/$VERSION $undef $loadfirst $fname $DIALOG_ABOUT $DIALOG_USAGE 
                                              $DIALOG_LOAD_ERROR $WAIT_BOX/;
 
 
 $,=" ";
-$VERSION='0.02';
+$VERSION='0.04';
 $undef=0;
-$loadfirst=0; 
+$loadfirst=0;
+$fname=""; 
 
 
 ###########################################################################
@@ -99,7 +110,7 @@ sub roc_save{
     #            * value of entry field (string)
     
     my($w, $pinfo) = @_;    
-    my($a);
+    my($a,$psfname);
    
     $a = $w->postscript;
             
@@ -109,7 +120,10 @@ sub roc_save{
     }
     else{
        #print "no lpr file\n";
-       open(LPR, ">$pinfo->{'prcmd'}");
+       #print dirname($fname)."/".$pinfo->{'prcmd'},"\n";
+       #open(LPR, ">$pinfo->{'prcmd'}");
+       $psfname = dirname($fname)."/".$pinfo->{'prcmd'};
+       open(LPR, ">$psfname");
     }
     print LPR $a;close(LPR);
 } # end roc_save
@@ -121,7 +135,7 @@ sub fileSelector{
     # Selects and loads a datafile and draws the ROC curve with
     # default values. Makes checks on data.
     # Lines beginning with $ and # are treated as commentaries.
-    # Uses the Tk::FileDialog widget for file selection.
+    # Uses the Tk::getOpenFile widget for file selection.
     #
     # Arguments: * handle of the main window
     #            * handle of the canvas widget
@@ -138,22 +152,26 @@ sub fileSelector{
     my($MW,$c,$xzero,$yzero,$xone,$yone,$model_type_ref,
                                           $conf_ref,$var_grp_ref)   = @$but;  
     my($Horiz) = 1;
-    my $fname; my $dir=cwd();
+    # my $fname; 
+    my $dir=cwd();
     my @line=();
     
     @$$var_grp_ref=();  # reinitialize data array
         
 
-    my($LoadDialog) = $MW->FileDialog(-Title =>'Select a datafile!',
- 				    -Create => 0);
-
-    $LoadDialog->configure(-FPat => '*',-ShowAll => 'NO',-Path=>$dir);
-
-    $fname = $LoadDialog->Show(-Horiz => $Horiz);
+ 
+    
+    $fname = $MW->getOpenFile(-title =>'Select a datafile!', -initialdir =>'.'); # $fname needs to be global for draw_roc
+    
     
     
     return if !defined($fname); # check if filename is valid
-    
+
+    $main::name=fileparse($fname);
+    $MW->title("ROC with confidence: $main::name");
+   
+
+
     # open file and read in data
     open(DATA, "$fname");
     LINE: 
@@ -206,7 +224,7 @@ sub draw_roc{
   ($main::state_b,$main::state_o,$main::state_p,$main::state_r,$main::state_v)=
                                                             (1,1,1,1,1); # reset checkbuttons
   
-  $WAIT_BOX->Show;
+
   
   if($$model_type eq 'grp0 > grp1'){$m_type='decrease'}
   elsif($$model_type eq 'grp0 < grp1'){$m_type='increase'}
@@ -232,43 +250,9 @@ sub draw_roc{
     }
   
 
-my ($i,$tmp);
-#  # calculate optimal cutoff value of estimated ROC curve
-#  my (@max,$tmp,$imax,$i); $imax=0; # determine max ss/2
-#  for($i=0;$i<@{$ROC[0]};$i++)
-#    { 
-#      $max[$i]=1-$ROC[1][$i][0]+$ROC[1][$i][1]; 
-#    }
-#  for($i=0,$tmp=$max[0];$i<@{$ROC[0]};$i++)
-#    { 
-#      if($max[$i]>$tmp)
-#	{$tmp=$max[$i]; $imax=$i;}
-#    }
-  
- 
-#  $c->create('line',($xone-$xzero)*$ROC[1][$imax][0]+$xzero, 
-#	     $yzero,
-#	     ($xone-$xzero)*$ROC[1][$imax][0]+$xzero,
-#	     ($yone-$yzero)*$ROC[1][$imax][1]+$yzero, 
-#	     -fill=>'blue',  -tags=>['opt'],    
-#	     -width=>2);
-#  $c->create('line',$xzero, 
-#	     ($yone-$yzero)*$ROC[1][$imax][1]+$yzero,
-#	     $xone,
-#	     ($yone-$yzero)*$ROC[1][$imax][1]+$yzero, 
-#	     -fill=>'blue',  -tags=>['opt'],    
-#	     -width=>2);
-#  $c->create('oval',($xone-$xzero)*$ROC[1][$imax][0]+$xzero-6,           
-#	     ($yone-$yzero)*$ROC[1][$imax][1]+$yzero-6,
-#	     ($xone-$xzero)*$ROC[1][$imax][0]+$xzero+6,           
-#	     ($yone-$yzero)*$ROC[1][$imax][1]+$yzero+6,
-#	     -width=>1,-fill=>'blue',-tags=>['opt']);
-#  my $text= sprintf "%1.3f\n%1.3f", $ROC[1][$imax][0], $ROC[1][$imax][1];
-#  $c->createText(($xone-$xzero)*$ROC[1][$imax][0]+$xzero,           
-#		 ($yone-$yzero)*$ROC[1][$imax][1]+$yzero-30,
-#		 -text=>$text,
-#		 -tags=>['realroc']);
-  
+  my ($i,$tmp);
+
+   
   
   # calculate optimal cutoff value of empirical ROC curve  
   my($rp,$fp,$rn,$fn)=(0,0,0,0);
@@ -276,7 +260,7 @@ my ($i,$tmp);
   my @ss2=();
   my $g;
   my $gmax;
-  my $text;
+  my ($text1,$text2);
    
   for( my $j=0;$j<@$$var_grp;$j++)    
     {	
@@ -337,10 +321,10 @@ my ($i,$tmp);
  
   # rounding routine because 0.8125 rounds falsely with %.3 to 0.812
   sub round {$_[0] >0 ? int $_[0]+0.5 : int $_[0]-0.5}
-  $text= sprintf "ACC SENSI SPECI PPV NPV\n%.3f %.3f %.3f %.3f %.3f", 
+  $text1= sprintf "ACC SENSI SPECI PPV NPV\n%.3f %.3f %.3f %.3f %.3f", 
                                          map {round(int($_ *10000)/10)/1000} @{$ss2[$gmax]};  
   $c->createText($xzero+100, $yone-20,
-		 -text=>$text,
+		 -text=>$text1,
 		 -tags=>['values']);
 
   $c->createLine(($xone-$xzero)*(1-$ss2[$gmax][2])+$xzero, 
@@ -348,23 +332,25 @@ my ($i,$tmp);
 	     ($xone-$xzero)*(1-$ss2[$gmax][2])+$xzero,
 	     ($yone-$yzero)*$ss2[$gmax][1]+$yzero, 
 	     -fill=>'blue',  -tags=>['opt'],    
-	     -width=>2);
+	     -width=>1);
+
   $c->createLine($xzero, 
 	     ($yone-$yzero)*$ss2[$gmax][1]+$yzero,
-	     $xone,
+             ($xone-$xzero)*(1-$ss2[$gmax][2])+$xzero,
 	     ($yone-$yzero)*$ss2[$gmax][1]+$yzero, 
 	     -fill=>'blue',  -tags=>['opt'],    
-	     -width=>2);
+	     -width=>1);
+
   $c->createOval(($xone-$xzero)*(1-$ss2[$gmax][2])+$xzero-6,           
 	     ($yone-$yzero)*$ss2[$gmax][1]+$yzero-6,
 	     ($xone-$xzero)*(1-$ss2[$gmax][2])+$xzero+6,           
 	     ($yone-$yzero)*$ss2[$gmax][1]+$yzero+6,
 	     -width=>1,-fill=>'blue',-tags=>['opt']);
  
-  $text= sprintf "%1.3f\n%1.3f", 1-$ss2[$gmax][2], $ss2[$gmax][1];
+  $text2= sprintf "%1.3f\n%1.3f", 1-$ss2[$gmax][2], $ss2[$gmax][1];
   $c->createText(($xone-$xzero)*(1-$ss2[$gmax][2])+$xzero,           
 		 ($yone-$yzero)*$ss2[$gmax][1]+$yzero-30,
-		 -text=>$text,
+		 -text=>$text2,
 		 -tags=>['opt','values']);
   
   
@@ -386,10 +372,44 @@ my ($i,$tmp);
 		     -width=>2);
     } 
    
-
   
-  $WAIT_BOX->unShow;                    
-}
+  # save ROC curves to file
+  if($main::state_s)
+    {
+      #$c->messageBox(-icon => 'error', -message => 'Cannot create roc-file.');
+      unless (open CURVES, ">$fname.txt") {die "Cannot create roc-file: $!";}
+      print CURVES "$fname.txt\n";  # print filename
+      print CURVES "Modeltype: $$model_type, 2-sided confidence interval: ",$$conf/100,"\n";
+      print CURVES "Threshold: $$$var_grp[$gmax][0] \n";
+      print CURVES "$text1\n";
+      print CURVES "#######\n"; 
+      print CURVES "Empirical ROC curve (x,y):\n";
+      for($i=0;$i<$#ss2+1;$i++)	  # step thru (x,y)-pairs
+	{
+	  print CURVES (1-$ss2[$i][2]),"  ",$ss2[$i][1],"\n";
+	}
+      print CURVES "#######\n";
+      print CURVES "Estimated ROC curve (x,y):\n";
+      for(my $i=0;$i<@{$ROC[0]};$i++) # step thru (x,y)-pairs
+	{
+	  print CURVES $ROC[1][$i][0],"  ",$ROC[1][$i][1],"\n";
+	}
+      print CURVES "#######\n";
+      print CURVES "Upper bound to estimated ROC curve (x,y):\n";
+      for(my $i=0;$i<@{$ROC[0]};$i++) # step thru (x,y)-pairs
+	{
+	  print CURVES $ROC[0][$i][0],"  ",$ROC[0][$i][1],"\n";
+	}
+      print CURVES "#######\n"; 
+      print CURVES "Lower bound to estimated ROC curve (x,y):\n";
+      for(my $i=0;$i<@{$ROC[0]};$i++) # step thru (x,y)-pairs
+	{
+	  print CURVES $ROC[2][$i][0],"  ",$ROC[2][$i][1],"\n";
+	}
+      close(CURVES);
+    }
+                   
+} # end draw_roc
 
 
 sub initialize_messages{
@@ -401,17 +421,19 @@ sub initialize_messages{
 The datafile has to have the following structure with one
 sample per row: \n    <value> <class:0/1>",
 				 -bitmap  => 'info',-wraplength => '3i',
-				 -buttons => ['Dismiss']);
+				 -buttons => ['Dismiss'],
+				 #-font => 'Arialbold'
+				 );
   $DIALOG_ABOUT = $MW->Dialog(
 			      -title   => 'About',
 			      -text    => 
-			      "ROC with confidence $VERSION \n\n15. February 2000\n\n
+			      "ROC with confidence $VERSION \n\nApril 26. 2007\n\n
 This program calculates receiver-operator characteristic  
 curves with nonparametric confidence bounds from data 
 separated into two groups.\n
 Author: Hans A. Kestler, h.kestler\@ieee.org
-                         hans.kestler\@medizin.uni-ulm.de
-Copyright (c) 1998-2000 by Hans Kestler. All rights reserved. 
+                         hans.kestler\@uni-ulm.de
+Copyright (c) 1998-2007 by Hans Kestler. All rights reserved. 
 This program is free software; it may be redistributed and/or 
 modified under the same terms as Perl itself.",
 				-bitmap  => 'info',-wraplength => '6i',
@@ -458,7 +480,6 @@ specificity. If the model is grp0 < grp1 the
 threshold value belongs to grp0, i.e.
 grp1 if value > threshold.");
 
-     $WAIT_BOX=$MW->WaitBox;#(-bitmap=>'questhead');
 
 } # end initialize_messages
 
@@ -479,11 +500,11 @@ sub draw_grid{
   
   for(my $i=0,my $inc=($xone-$xzero)/10;$i<=10;$i++){
     $c->createLine($xzero+$i*$inc,$yzero+4,
-		   $xzero+$i*$inc,$yone,-width=>2,-tags=>['grid']);
+		   $xzero+$i*$inc,$yone,-width=>1,-tags=>['grid']);
   }
   for(my $i=0,my $inc=($yone-$yzero)/10;$i<=10;$i++){
     $c->createLine($xzero-4,$yzero+$i*$inc,
-		   $xone,$yzero+$i*$inc,-width=>2,-tags=>['grid']);
+		   $xone,$yzero+$i*$inc,-width=>1,-tags=>['grid']);
   }
 }				# end draw_grid
 
@@ -503,11 +524,11 @@ sub draw_small_ticks{
   
   for(my $i=0,my $inc=($xone-$xzero)/100;$i<=100;$i++){
     $c->createLine($xzero+$i*$inc,$yzero+3,
-		   $xzero+$i*$inc,$yzero,-width=>1);
+		   $xzero+$i*$inc,$yzero,-width=>.5);
   }
   for(my $i=0,my $inc=($yone-$yzero)/100;$i<=100;$i++){
     $c->createLine($xzero-3,$yzero+$i*$inc,
-		   $xzero,$yzero+$i*$inc,-width=>1);
+		   $xzero,$yzero+$i*$inc,-width=>.5);
   }
 }				# end draw_small_ticks
 
@@ -524,11 +545,11 @@ sub draw_numbers{
   
   my ($c,$xzero,$yzero,$xone,$yone)=@{shift()};
   
-  for(my $i=0,my $inc=($xone-$xzero)/10;$i<=10;$i++){
+  for(my $i=0,my $inc=($xone-$xzero)/10;$i<=10;$i+=2){
     $c->create('text',$xzero+$i*$inc,$yzero+4+10,
 	       -text=>$i/10);
   }
-  for(my $i=0,my $inc=($yone-$yzero)/10;$i<=10;$i++){
+  for(my $i=0,my $inc=($yone-$yzero)/10;$i<=10;$i+=2){
     $c->create('text',$xzero-4-10,$yzero+$i*$inc,
 	       -text=>$i/10);
   }
@@ -547,7 +568,7 @@ sub draw_diagonal{
   
   my ($c,$xzero,$yzero,$xone,$yone)=@{shift()};
   
-  $c->createLine($xzero,$yzero,$xone,$yone,-width=>2, -tags=>['diag']);
+  $c->createLine($xzero,$yzero,$xone,$yone,-width=>1, -tags=>['diag']);
   
 }				# end draw_diagonal
 
@@ -570,7 +591,8 @@ my ($xzero,$yzero)=(($xsize-$area)/2,$ysize-($ysize-$area)/2);
 my ($xone,$yone)=($xsize-($xsize-$area)/2,($ysize-$area)/2);
 my @points=($xzero,$yzero,$xone,$yone);
 my $model_type ='grp0 < grp1'; 
-my $conf=95; 
+my $conf=95;
+$main::name=""; 
 
 
 my $c=$MW->Canvas(-width=>$xsize,-height=>$ysize)->pack;
@@ -584,7 +606,7 @@ draw_grid([$c,@points]);
 draw_numbers([$c,@points]);
 draw_small_ticks([$c,@points]);
 draw_diagonal([$c,@points]);
-$MW->WaitBox;
+
 
 
 ###### File Menu Button ######
@@ -594,9 +616,9 @@ make_menubutton($MBF,'File',0,'left',[
 ##############################
 
 ###### Options Menu Button ######
-my $mb_o=$MBF->Menubutton(text=>'Options',underline=>0)->pack(side=>'left');
+my $mb_o=$MBF->Menubutton(-text=>'Options',-underline=>0)->pack(-side=>'left');
 ($main::state_b,$main::state_g,$main::state_d,$main::state_o,$main::state_p,$main::state_r,
-                                                              $main::state_v)=(1,1,1,1,1,1,1);
+                                             $main::state_v,$main::state_s)=(1,1,1,1,1,1,1,0);
 $mb_o->checkbutton(
          -label=>'Bounds on/off',
          -variable=>\$main::state_b,
@@ -640,9 +662,14 @@ $mb_o->checkbutton(
          -variable=>\$main::state_v,
          -command=>sub{if(!$main::state_v){$c->delete('values')}
                        else{draw_roc([$c,@points,\$model_type,\$conf,\$var_grp_ref]);}} 
+        );                                
+$mb_o->checkbutton(
+         -label=>"Save curve values to file (suffix \".txt\" added) off/on",
+         -variable=>\$main::state_s,
+         -command=>sub{if($main::state_s)
+                           {draw_roc([$c,@points,\$model_type,\$conf,\$var_grp_ref]);}} 
         );
-                                
-
+# $save_cur->configure(label=>'Save curves values to file: $main::name.dat on/off');
 ##############################
 
 ###### Help Menu Button ######
@@ -699,10 +726,10 @@ my $del_roc=$left->Button(-text=>'Delete ROC curve!',
 
 
 ######## Confidence Interval #########
-my $conf_scale=$right->Scale('orient'=> 'horizontal',
-                           'from'=> 0, 'to'=> 100, 'tickinterval'=> 0, 'width'=> 15, 
-                           'length'=> 340,
-                           'label'=> "2-sided Confidence Interval (%)",
+my $conf_scale=$right->Scale('-orient'=> 'horizontal',
+                           '-from'=> 0, '-to'=> 100, '-tickinterval'=> 0, '-width'=> 15, 
+                           '-length'=> 340,
+                           '-label'=> "2-sided Confidence Interval (%)",
                           -variable=>\$conf,
            #-command=> [\&draw_roc, [$c, @points,\$model_type,\$conf,\$var_grp_ref]], 
            )->grid(qw/-row 0 -column 0 -columnspan 2  -sticky ew/);
